@@ -272,16 +272,26 @@ function App() {
       drawOfficeEnvironment(worldLayer);
 
       const roomLabels = [
-        { x: 70, y: 270, text: "Room 2" },
-        { x: 660, y: 270, text: "Room 1" },
+        { x: 88, y: 54, text: "Cubicle A" },
+        { x: 368, y: 54, text: "Cubicle B" },
+        { x: 648, y: 54, text: "Cubicle C" },
+        { x: 928, y: 54, text: "Cubicle D" },
+        { x: 1202, y: 54, text: "Cubicle E" },
+        { x: 120, y: 742, text: "Cubicle F" },
+        { x: 410, y: 742, text: "Cubicle G" },
+        { x: 700, y: 742, text: "Cubicle H" },
+        { x: 990, y: 742, text: "Cubicle I" },
+        { x: 560, y: 364, text: "Brainstorming Arena" },
+        { x: 72, y: 300, text: "CEO Room" },
       ];
 
       roomLabels.forEach((label) => {
         const badge = new Graphics();
-        badge.roundRect(label.x - 18, label.y - 10, 100, 32, 7).fill(0x111827);
+        const badgeWidth = Math.max(106, label.text.length * 8.2);
+        badge.roundRect(label.x - 12, label.y - 8, badgeWidth, 28, 7).fill(0x111827);
         const t = new Text({
           text: label.text,
-          style: { fill: "#f8fafc", fontSize: 15, fontWeight: "600" },
+          style: { fill: "#f8fafc", fontSize: 12, fontWeight: "600" },
         });
         t.x = label.x;
         t.y = label.y;
