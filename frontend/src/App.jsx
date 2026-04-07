@@ -43,15 +43,6 @@ const drawOfficeEnvironment = (worldLayer) => {
     worldLayer.addChild(desk);
   };
 
-  const addPlant = (x, y) => {
-    const plant = new Graphics();
-    plant.roundRect(x - 10, y + 8, 20, 16, 5).fill(0x8b5a2b);
-    plant.circle(x, y, 10).fill(0x16a34a);
-    plant.circle(x - 9, y + 2, 8).fill(0x22c55e);
-    plant.circle(x + 9, y + 2, 8).fill(0x22c55e);
-    worldLayer.addChild(plant);
-  };
-
   addDesk(60, 72, 240, 100);
   addDesk(340, 72, 240, 100);
   addDesk(620, 72, 240, 100);
@@ -89,11 +80,6 @@ const drawOfficeEnvironment = (worldLayer) => {
   glassRoom.roundRect(34, 324, 310, 260, 14).stroke({ width: 4, color: 0x94a3b8, alpha: 0.65 });
   glassRoom.roundRect(38, 328, 302, 252, 12).fill({ color: 0xb6d4ee, alpha: 0.12 });
   worldLayer.addChild(glassRoom);
-
-  addPlant(80, 300);
-  addPlant(1320, 120);
-  addPlant(1200, 700);
-  addPlant(220, 700);
 };
 
 const createAvatarVisual = (user, isLocal) => {
