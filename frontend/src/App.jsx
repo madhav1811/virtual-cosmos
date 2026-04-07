@@ -415,6 +415,16 @@ function App() {
     setVisibleGamesByRoom((prev) => ({ ...prev, [activeRoomId]: true }));
   };
 
+  const toggleTicTacToe = () => {
+    if (!activeRoomId || !activeChat) return;
+    const isVisible = Boolean(visibleGamesByRoom[activeRoomId]);
+    if (isVisible) {
+      setVisibleGamesByRoom((prev) => ({ ...prev, [activeRoomId]: false }));
+      return;
+    }
+    startTicTacToe();
+  };
+
   const resetTicTacToe = () => {
     if (!activeRoomId) return;
     socketRef.current?.emit("ttt-reset", { roomId: activeRoomId });
@@ -490,11 +500,13 @@ function App() {
               <h2 className="text-lg font-semibold">Chat</h2>
               <button
                 type="button"
-                onClick={startTicTacToe}
+                onClick={toggleTicTacToe}
                 disabled={!activeChat}
-                className="rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                className={`rounded-md px-2 py-1 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 ${
+                  isGameVisible ? "bg-rose-600" : "bg-emerald-600"
+                }`}
               >
-                TIC TAC TOE
+                TIC TAC TOE {isGameVisible ? "OFF" : "ON"}
               </button>
             </div>
             {activeChat ? (
