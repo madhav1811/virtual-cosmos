@@ -152,8 +152,11 @@ const createAvatarVisual = (user, isLocal) => {
 function App() {
   const stageRef = useRef(null);
   const appRef = useRef(null);
+  const pixiCleanupRef = useRef(() => {});
   const socketRef = useRef(null);
   const keyStateRef = useRef({});
+  const zoomRef = useRef(1);
+  const cameraRef = useRef({ x: 0, y: 0 });
   const worldUsersRef = useRef([]);
   const localStateRef = useRef({
     userId: null,
@@ -241,6 +244,13 @@ function App() {
       stageRef.current.appendChild(app.canvas);
       appRef.current = app;
 
+      const resizeRendererToContainer = () => {
+        const containerWidth = Math.max(520, stageRef.current?.clientWidth || WORLD_WIDTH);
+        const containerHeight = Math.max(360, stageRef.current?.clientHeight || WORLD_HEIGHT);
+        app.renderer.resize(containerWidth, containerHeight);
+      };
+      resizeRendererToContainer();
+
       const worldLayer = new Container();
       app.stage.addChild(worldLayer);
       drawOfficeEnvironment(worldLayer);
@@ -282,6 +292,21 @@ function App() {
           socketRef.current?.emit("move-user", { x, y });
         }
 
+        const zoom = zoomRef.current;
+        const viewportWidth = app.renderer.width;
+        const viewportHeight = app.renderer.height;
+        const halfWorldViewW = viewportWidth / (2 * zoom);
+        const halfWorldViewH = viewportHeight / (2 * zoom);
+        const clampedCameraX = Math.max(halfWorldViewW, Math.min(WORLD_WIDTH - halfWorldViewW, x));
+        const clampedCameraY = Math.max(halfWorldViewH, Math.min(WORLD_HEIGHT - halfWorldViewH, y));
+        cameraRef.current = { x: clampedCameraX, y: clampedCameraY };
+
+        worldLayer.scale.set(zoom);
+        worldLayer.position.set(
+          viewportWidth / 2 - clampedCameraX * zoom,
+          viewportHeight / 2 - clampedCameraY * zoom
+        );
+
         const usersMap = new Map(worldUsersRef.current.map((user) => [user.userId, user]));
         usersMap.forEach((user) => {
           const isLocal = user.userId === localStateRef.current.userId;
@@ -309,6 +334,21 @@ function App() {
       };
 
       app.ticker.add(ticker);
+
+      const handleResize = () => resizeRendererToContainer();
+      const handleWheel = (event) => {
+        event.preventDefault();
+        const zoomStep = event.deltaY > 0 ? -0.08 : 0.08;
+        zoomRef.current = Math.max(0.7, Math.min(1.8, zoomRef.current + zoomStep));
+      };
+      const stageElement = stageRef.current;
+      stageElement?.addEventListener("wheel", handleWheel, { passive: false });
+      window.addEventListener("resize", handleResize);
+
+      pixiCleanupRef.current = () => {
+        stageElement?.removeEventListener("wheel", handleWheel);
+        window.removeEventListener("resize", handleResize);
+      };
     };
 
     initPixi();
@@ -316,6 +356,7 @@ function App() {
     return () => {
       mounted = false;
       if (appRef.current) {
+        pixiCleanupRef.current?.();
         appRef.current.destroy(true, { children: true });
         appRef.current = null;
       }
@@ -371,7 +412,7 @@ function App() {
           </header>
 
           <div className="border-b border-slate-700 px-4 py-3">
-            <div className="flex gap-3 overflow-x-auto">
+            <div className="vc-scrollbar flex gap-3 overflow-x-auto">
               {nearbyUsers.length === 0 && (
                 <div className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-400">
                   Walk near another user to connect.
@@ -389,7 +430,7 @@ function App() {
             </div>
           </div>
 
-          <div ref={stageRef} className="flex-1 overflow-auto bg-slate-950 p-2" />
+          <div ref={stageRef} className="vc-scrollbar flex-1 overflow-hidden bg-slate-950 p-2" />
         </section>
 
         <aside className="flex h-full w-[360px] flex-col rounded-xl border border-slate-700 bg-white text-slate-900">
@@ -402,7 +443,7 @@ function App() {
             )}
           </div>
 
-          <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
+          <div className="vc-scrollbar flex-1 space-y-2 overflow-y-auto px-4 py-3">
             {activeMessages.length === 0 && (
               <p className="text-sm text-slate-500">
                 {activeChat ? "No messages yet. Say hello!" : "This is the beginning of your chat history."}
