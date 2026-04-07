@@ -5,6 +5,19 @@ import { io } from "socket.io-client";
 const WORLD_WIDTH = 1400;
 const WORLD_HEIGHT = 900;
 const SOCKET_URL = "http://localhost:4000";
+const PLAYER_RADIUS = 10;
+
+const CUBICLE_LAYOUT = [
+  { x: 60, y: 72, width: 240, height: 100 },
+  { x: 340, y: 72, width: 240, height: 100 },
+  { x: 620, y: 72, width: 240, height: 100 },
+  { x: 900, y: 72, width: 240, height: 100 },
+  { x: 1180, y: 72, width: 180, height: 100 },
+  { x: 90, y: 760, width: 240, height: 90 },
+  { x: 380, y: 760, width: 240, height: 90 },
+  { x: 670, y: 760, width: 240, height: 90 },
+  { x: 960, y: 760, width: 240, height: 90 },
+];
 
 const randomColor = () => {
   const colors = ["#22d3ee", "#f97316", "#a78bfa", "#34d399", "#f43f5e", "#facc15"];
@@ -22,6 +35,62 @@ const shadeHex = (hex, amount) => {
   const b = Math.max(0, Math.min(255, (raw & 0xff) + amount));
   return (r << 16) + (g << 8) + b;
 };
+
+const expandRect = (rect, padding) => ({
+  x: rect.x - padding,
+  y: rect.y - padding,
+  width: rect.width + padding * 2,
+  height: rect.height + padding * 2,
+});
+
+const collidesWithRect = (point, rect) =>
+  point.x >= rect.x &&
+  point.x <= rect.x + rect.width &&
+  point.y >= rect.y &&
+  point.y <= rect.y + rect.height;
+
+const buildCubicleWallRects = () => {
+  const wallThickness = 8;
+  const openingSize = 56;
+  const walls = [];
+
+  CUBICLE_LAYOUT.forEach((cubicle) => {
+    const expanded = expandRect(cubicle, PLAYER_RADIUS);
+    const openingStartX = expanded.x + (expanded.width - openingSize) / 2;
+    const openingEndX = openingStartX + openingSize;
+
+    walls.push(
+      // Left wall
+      { x: expanded.x, y: expanded.y, width: wallThickness, height: expanded.height },
+      // Right wall
+      {
+        x: expanded.x + expanded.width - wallThickness,
+        y: expanded.y,
+        width: wallThickness,
+        height: expanded.height,
+      },
+      // Top wall
+      { x: expanded.x, y: expanded.y, width: expanded.width, height: wallThickness },
+      // Bottom wall split with center opening (single entry side, uniform across cubicles)
+      {
+        x: expanded.x,
+        y: expanded.y + expanded.height - wallThickness,
+        width: openingStartX - expanded.x,
+        height: wallThickness,
+      },
+      {
+        x: openingEndX,
+        y: expanded.y + expanded.height - wallThickness,
+        width: expanded.x + expanded.width - openingEndX,
+        height: wallThickness,
+      }
+    );
+  });
+
+  return walls;
+};
+
+const CUBICLE_WALL_RECTS = buildCubicleWallRects();
 
 const drawOfficeEnvironment = (worldLayer) => {
   const floorGrid = new Graphics();
@@ -43,16 +112,39 @@ const drawOfficeEnvironment = (worldLayer) => {
     worldLayer.addChild(desk);
   };
 
-  addDesk(60, 72, 240, 100);
-  addDesk(340, 72, 240, 100);
-  addDesk(620, 72, 240, 100);
-  addDesk(900, 72, 240, 100);
-  addDesk(1180, 72, 180, 100);
+  CUBICLE_LAYOUT.forEach((cubicle) => addDesk(cubicle.x, cubicle.y, cubicle.width, cubicle.height));
 
-  addDesk(90, 760, 240, 90);
-  addDesk(380, 760, 240, 90);
-  addDesk(670, 760, 240, 90);
-  addDesk(960, 760, 240, 90);
+  CUBICLE_LAYOUT.forEach((cubicle) => {
+    const cubicleWalls = new Graphics();
+    const wallColor = 0x64748b;
+    const wallThickness = 4;
+    const openingSize = 48;
+    const openingStartX = cubicle.x + (cubicle.width - openingSize) / 2;
+    const openingEndX = openingStartX + openingSize;
+
+    cubicleWalls
+      .moveTo(cubicle.x, cubicle.y)
+      .lineTo(cubicle.x + cubicle.width, cubicle.y)
+      .stroke({ width: wallThickness, color: wallColor, alpha: 0.95 });
+    cubicleWalls
+      .moveTo(cubicle.x, cubicle.y)
+      .lineTo(cubicle.x, cubicle.y + cubicle.height)
+      .stroke({ width: wallThickness, color: wallColor, alpha: 0.95 });
+    cubicleWalls
+      .moveTo(cubicle.x + cubicle.width, cubicle.y)
+      .lineTo(cubicle.x + cubicle.width, cubicle.y + cubicle.height)
+      .stroke({ width: wallThickness, color: wallColor, alpha: 0.95 });
+    cubicleWalls
+      .moveTo(cubicle.x, cubicle.y + cubicle.height)
+      .lineTo(openingStartX, cubicle.y + cubicle.height)
+      .stroke({ width: wallThickness, color: wallColor, alpha: 0.95 });
+    cubicleWalls
+      .moveTo(openingEndX, cubicle.y + cubicle.height)
+      .lineTo(cubicle.x + cubicle.width, cubicle.y + cubicle.height)
+      .stroke({ width: wallThickness, color: wallColor, alpha: 0.95 });
+
+    worldLayer.addChild(cubicleWalls);
+  });
 
   const meetingTable = new Graphics();
   meetingTable.roundRect(460, 330, 480, 220, 24).fill(0xd4b38b);
@@ -311,6 +403,12 @@ function App() {
 
         x = Math.max(10, Math.min(WORLD_WIDTH - 10, x));
         y = Math.max(10, Math.min(WORLD_HEIGHT - 10, y));
+
+        const collidesWithWall = CUBICLE_WALL_RECTS.some((wallRect) => collidesWithRect({ x, y }, wallRect));
+        if (collidesWithWall) {
+          x = localStateRef.current.position.x;
+          y = localStateRef.current.position.y;
+        }
 
         const didMove = x !== localStateRef.current.position.x || y !== localStateRef.current.position.y;
         if (didMove) {
