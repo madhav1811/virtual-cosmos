@@ -169,12 +169,16 @@ function App() {
   const [avatarColor] = useState(randomColor);
   const [nearbyUsers, setNearbyUsers] = useState([]);
   const [messagesByRoom, setMessagesByRoom] = useState({});
+  const [gamesByRoom, setGamesByRoom] = useState({});
+  const [visibleGamesByRoom, setVisibleGamesByRoom] = useState({});
   const [message, setMessage] = useState("");
   const [connected, setConnected] = useState(false);
 
   const activeChat = nearbyUsers[0] || null;
   const activeRoomId = activeChat?.roomId || null;
   const activeMessages = activeRoomId ? messagesByRoom[activeRoomId] || [] : [];
+  const activeGame = activeRoomId ? gamesByRoom[activeRoomId] || null : null;
+  const isGameVisible = activeRoomId ? Boolean(visibleGamesByRoom[activeRoomId]) : false;
 
   useEffect(() => {
     const socket = io(SOCKET_URL, { transports: ["websocket"] });
@@ -214,6 +218,18 @@ function App() {
           [payload.roomId]: [...roomMessages, payload].slice(-100),
         };
       });
+    });
+
+    socket.on("ttt-state", (payload) => {
+      if (!payload?.roomId) return;
+      setGamesByRoom((prev) => ({
+        ...prev,
+        [payload.roomId]: payload,
+      }));
+      setVisibleGamesByRoom((prev) => ({
+        ...prev,
+        [payload.roomId]: true,
+      }));
     });
 
     return () => {
@@ -393,6 +409,41 @@ function App() {
     setMessage("");
   };
 
+  const startTicTacToe = () => {
+    if (!activeRoomId) return;
+    socketRef.current?.emit("ttt-start", { roomId: activeRoomId });
+    setVisibleGamesByRoom((prev) => ({ ...prev, [activeRoomId]: true }));
+  };
+
+  const resetTicTacToe = () => {
+    if (!activeRoomId) return;
+    socketRef.current?.emit("ttt-reset", { roomId: activeRoomId });
+  };
+
+  const onTicTacToeMove = (index) => {
+    if (!activeRoomId || !activeGame) return;
+    socketRef.current?.emit("ttt-move", { roomId: activeRoomId, index });
+  };
+
+  const localUserId = localStateRef.current.userId;
+  const localSymbol = !activeGame
+    ? null
+    : localUserId === activeGame.xPlayerId
+      ? "X"
+      : localUserId === activeGame.oPlayerId
+        ? "O"
+        : null;
+  const gameStatusText = useMemo(() => {
+    if (!activeGame) return "Click TIC TAC TOE to start.";
+    if (activeGame.winner) return `Winner: ${activeGame.winner}`;
+    if (activeGame.isDraw) return "Game ended in a draw.";
+    if (!activeGame.nextTurnUserId) return "Waiting...";
+    if (activeGame.nextTurnUserId === localUserId) {
+      return `Your turn (${localSymbol || "-"})`;
+    }
+    return "Opponent's turn";
+  }, [activeGame, localSymbol, localUserId]);
+
   const statusBadge = useMemo(() => {
     if (!connected) return "Connecting to Cosmos...";
     if (!activeChat) return "No nearby explorers";
@@ -435,13 +486,61 @@ function App() {
 
         <aside className="flex h-full w-[360px] flex-col rounded-xl border border-slate-700 bg-white text-slate-900">
           <div className="border-b px-4 py-3">
-            <h2 className="text-lg font-semibold">Chat</h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Chat</h2>
+              <button
+                type="button"
+                onClick={startTicTacToe}
+                disabled={!activeChat}
+                className="rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                TIC TAC TOE
+              </button>
+            </div>
             {activeChat ? (
               <p className="text-sm text-slate-600">Live with @{activeChat.username}</p>
             ) : (
               <p className="text-sm text-slate-500">Move close to someone to unlock chat</p>
             )}
           </div>
+
+          {isGameVisible && (
+            <div className="border-b bg-slate-50 px-4 py-3">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-xs font-semibold text-slate-700">Tic Tac Toe</div>
+                <button
+                  type="button"
+                  onClick={resetTicTacToe}
+                  disabled={!activeGame}
+                  className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Reset
+                </button>
+              </div>
+              <div className="mb-2 text-xs text-slate-600">{gameStatusText}</div>
+              <div className="grid grid-cols-3 gap-2">
+                {(activeGame?.board || Array(9).fill(null)).map((cellValue, index) => {
+                  const isDisabled =
+                    !activeGame ||
+                    Boolean(cellValue) ||
+                    Boolean(activeGame.winner) ||
+                    activeGame.isDraw ||
+                    activeGame.nextTurnUserId !== localUserId;
+                  return (
+                    <button
+                      type="button"
+                      key={`ttt-cell-${index}`}
+                      onClick={() => onTicTacToeMove(index)}
+                      disabled={isDisabled}
+                      className="h-12 rounded-md border border-slate-300 bg-white text-xl font-bold text-indigo-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                    >
+                      {cellValue || ""}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="vc-scrollbar flex-1 space-y-2 overflow-y-auto px-4 py-3">
             {activeMessages.length === 0 && (
